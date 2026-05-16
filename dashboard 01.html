@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>National Security Social Media Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        .sidebar {
+            transition: all 0.3s;
+        }
+        .dashboard-card {
+            backdrop-filter: blur(10px);
+            background: rgba(15, 23, 42, 0.7);
+        }
+        .risk-high {
+            border-left: 4px solid #ef4444;
+        }
+        .risk-medium {
+            border-left: 4px solid #f59e0b;
+        }
+        .risk-low {
+            border-left: 4px solid #10b981;
+        }
+        .map-container {
+            height: 400px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .word-cloud {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 1rem;
+        }
+        .word-cloud span {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .word-cloud span:hover {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex">
+    <!-- Sidebar Navigation -->
+    <div class="sidebar w-64 bg-gray-800 border-r border-gray-700 flex-shrink-0 hidden md:block">
+        <div class="p-4 border-b border-gray-700">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg">
+                    <i data-feather="shield"></i>
+                </div>
+                <h1 class="text-xl font-bold">SOCIAL MONITOR</h1>
+            </div>
+        </div>
+        <nav class="p-4">
+            <ul class="space-y-2">
+                <li>
+                    <a href="#" class="flex items-center space-x-3 p-3 rounded-lg bg-gray-700 text-blue-400">
+                        <i data-feather="activity"></i>
+                        <span>Overview</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-700">
+                        <i data-feather="trending-up"></i>
+                        <span>Trends</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-700">
+                        <i data-feather="smile"></i>
+                        <span>Sentiment Analysis</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-700">
+                        <i data-feather="bell"></i>
+                        <span>Alerts</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-700">
+                        <i data-feather="file-text"></i>
+                        <span>Reports</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        <div class="p-4 border-t border-gray-700 mt-auto">
+            <div class="text-sm text-gray-400">Last updated: <span id="lastUpdated">Just now</span></div>
+            <button class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center justify-center space-x-2">
+                <i data-feather="refresh-cw"></i>
+                <span>Refresh Data</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Mobile Header -->
+    <div class="md:hidden fixed top-0 left-0 right-0 bg-gray-800 z-10 p-4 flex justify-between items-center border-b border-gray-700">
+        <button id="mobileMenuButton" class="text-gray-300">
+            <i data-feather="menu"></i>
+        </button>
+        <h1 class="text-xl font-bold">SOCIAL MONITOR</h1>
+        <button class="text-gray-300">
+            <i data-feather="refresh-cw"></i>
+        </button>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 overflow-auto pt-16 md:pt-0">
+        <!-- Alert Banner -->
+        <div class="bg-red-900 text-white p-4 mb-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <i data-feather="alert-triangle"></i>
+                <span>3 new high-risk alerts detected in the last 15 minutes</span>
+            </div>
+            <button class="text-gray-300 hover:text-white">
+                <i data-feather="x"></i>
+            </button>
+        </div>
+
+        <div class="p-4 md:p-8">
+            <!-- Filters -->
+            <div class="dashboard-card p-6 rounded-xl mb-6">
+                <h2 class="text-lg font-semibold mb-4">Filters</h2>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Time Range</label>
+                        <select class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2">
+                            <option>Last 24 hours</option>
+                            <option selected>Last 7 days</option>
+                            <option>Last 30 days</option>
+                            <option>Custom range</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Platform</label>
+                        <select class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2">
+                            <option>All Platforms</option>
+                            <option selected>Twitter/X</option>
+                            <option>YouTube</option>
+                            <option>Reddit</option>
+                            <option>Facebook/Instagram</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Keywords/Hashtags</label>
+                        <input type="text" placeholder="e.g. #security, threat" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Language</label>
+                        <select class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2">
+                            <option selected>All Languages</option>
+                            <option>English</option>
+                            <option>Spanish</option>
+                            <option>Arabic</option>
+                            <option>Russian</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-end mt-4">
+                    <button class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-lg">Apply Filters</button>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="dashboard-card p-4 rounded-xl">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-sm text-gray-400">Total Mentions</p>
+                            <p class="text-2xl font-bold">24,568</p>
+                            <p class="text-sm text-green-500 flex items-center">
+                                <i data-feather="trending-up" class="w-4 h-4 mr-1"></i>
+                                +12% from yesterday
+                            </p>
+                        </div>
+                        <div class="bg-blue-600 p-3 rounded-lg">
+                            <i data-feather="message-square"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard-card p-4 rounded-xl">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-sm text-gray-400">High Risk Posts</p>
+                            <p class="text-2xl font-bold">87</p>
+                            <p class="text-sm text-red-500 flex items-center">
+                                <i data-feather="alert-triangle" class="w-4 h-4 mr-1"></i>
+                                +23% from yesterday
+                            </p>
+                        </div>
+                        <div class="bg-red-600 p-3 rounded-lg">
+                            <i data-feather="alert-octagon"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard-card p-4 rounded-xl">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-sm text-gray-400">Sentiment Score</p>
+                            <p class="text-2xl font-bold">-0.24</p>
+                            <p class="text-sm text-yellow-500 flex items-center">
+                                <i data-feather="minus" class="w-4 h-4 mr-1"></i>
+                                Negative trend
+                            </p>
+                        </div>
+                        <div class="bg-yellow-600 p-3 rounded-lg">
+                            <i data-feather="frown"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard-card p-4 rounded-xl">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-sm text-gray-400">Top Influencers</p>
+                            <p class="text-2xl font-bold">42</p>
+                            <p class="text-sm text-blue-500 flex items-center">
+                                <i data-feather="users" class="w-4 h-4 mr-1"></i>
+                                Monitoring 12 new
+                            </p>
+                        </div>
+                        <div class="bg-purple-600 p-3 rounded-lg">
+                            <i data-feather="user"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row 1 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Trends Chart -->
+                <div class="dashboard-card p-6 rounded-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold">Mentions Over Time</h2>
+                        <div class="flex space-x-2">
+                            <button class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">Daily</button>
+                            <button class="text-xs bg-blue-600 px-3 py-1 rounded">Weekly</button>
+                            <button class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">Monthly</button>
+                        </div>
+                    </div>
+                    <canvas id="trendsChart" height="250"></canvas>
+                </div>
+
+                <!-- Sentiment Chart -->
+                <div class="dashboard-card p-6 rounded-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold">Sentiment Analysis</h2>
+                        <div class="text-sm text-gray-400">Last 7 days</div>
+                    </div>
+                    <canvas id="sentimentChart" height="250"></canvas>
+                </div>
+            </div>
+
+            <!-- Charts Row 2 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Word Cloud -->
+                <div class="dashboard-card p-6 rounded-xl">
+                    <h2 class="text-lg font-semibold mb-4">Top Keywords & Hashtags</h2>
+                    <div class="word-cloud">
+                        <span class="text-3xl font-bold text-blue-400">#security</span>
+                        <span class="text-2xl font-bold text-green-400">threat</span>
+                        <span class="text-xl font-bold text-yellow-400">government</span>
+                        <span class="text-lg font-bold text-purple-400">#cyberattack</span>
+                        <span class="text-2xl font-bold text-red-400">alert</span>
+                        <span class="text-xl font-bold text-blue-400">#defense</span>
+                        <span class="text-lg font-bold text-green-400">monitoring</span>
+                        <span class="text-xl font-bold text-yellow-400">#terror</span>
+                        <span class="text-lg font-bold text-purple-400">intelligence</span>
+                        <span class="text-2xl font-bold text-red-400">#warning</span>
+                    </div>
+                </div>
+
+                <!-- Geo Map -->
+                <div class="dashboard-card p-6 rounded-xl">
+                    <h2 class="text-lg font-semibold mb-4">Geographical Distribution</h2>
+                    <div class="map-container" id="map"></div>
+                </div>
+            </div>
+
+            <!-- High Risk Posts -->
+            <div class="dashboard-card p-6 rounded-xl mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold">High Risk Content</h2>
+                    <button class="text-sm text-blue-400 hover:text-blue-300 flex items-center">
+                        <i data-feather="download" class="w-4 h-4 mr-1"></i>
+                        Export CSV
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="text-left text-sm text-gray-400 border-b border-gray-700">
+                                <th class="pb-3">Risk Level</th>
+                                <th class="pb-3">Content</th>
+                                <th class="pb-3">Author</th>
+                                <th class="pb-3">Platform</th>
+                                <th class="pb-3">Date</th>
+                                <th class="pb-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-700">
+                            <tr class="hover:bg-gray-800 risk-high">
+                                <td class="py-3">
+                                    <span class="px-2 py-1 bg-red-900 text-red-100 rounded text-xs">High</span>
+                                </td>
+                                <td class="py-3 max-w-xs truncate">Urgent: Security breach at government facility #securityalert #threat</td>
+                                <td class="py-3">@anon_threat</td>
+                                <td class="py-3">
+                                    <div class="flex items-center">
+                                        <i data-feather="twitter" class="w-4 h-4 mr-1 text-blue-400"></i>
+                                        Twitter
+                                    </div>
+                                </td>
+                                <td class="py-3">2 hours ago</td>
+                                <td class="py-3">
+                                    <button class="text-gray-400 hover:text-white">
+                                        <i data-feather="more-vertical"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-gray-800 risk-high">
+                                <td class="py-3">
+                                    <span class="px-2 py-1 bg-red-900 text-red-100 rounded text-xs">High</span>
+                                </td>
+                                <td class="py-3 max-w-xs truncate">Detailed plans for disrupting public transport system found on dark web</td>
+                                <td class="py-3">u/security_alert</td>
+                                <td class="py-3">
+                                    <div class="flex items-center">
+                                        <i data-feather="globe" class="w-4 h-4 mr-1 text-orange-500"></i>
+                                        Reddit
+                                    </div>
+                                </td>
+                                <td class="py-3">5 hours ago</td>
+                                <td class="py-3">
+                                    <button class="text-gray-400 hover:text-white">
+                                        <i data-feather="more-vertical"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-gray-800 risk-medium">
+                                <td class="py-3">
+                                    <span class="px-2 py-1 bg-yellow-900 text-yellow-100 rounded text-xs">Medium</span>
+                                </td>
+                                <td class="py-3 max-w-xs truncate">Protest organizers sharing locations of police checkpoints #resistance</td>
+                                <td class="py-3">@activist123</td>
+                                <td class="py-3">
+                                    <div class="flex items-center">
+                                        <i data-feather="twitter" class="w-4 h-4 mr-1 text-blue-400"></i>
+                                        Twitter
+                                    </div>
+                                </td>
+                                <td class="py-3">1 day ago</td>
+                                <td class="py-3">
+                                    <button class="text-gray-400 hover:text-white">
+                                        <i data-feather="more-vertical"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 text-center">
+                    <button class="text-sm text-blue-400 hover:text-blue-300 flex items-center justify-center w-full py-2">
+                        <i data-feather="plus" class="w-4 h-4 mr-1"></i>
+                        Load More
+                    </button>
+                </div>
+            </div>
+
+            <!-- Top Influencers -->
+            <div class="dashboard-card p-6 rounded-xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold">Top Influencers</h2>
+                    <div class="flex space-x-2">
+                        <button class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">By Reach</button>
+                        <button class="text-xs bg-blue-600 px-3 py-1 rounded">By Engagement</button>
+                        <button class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">By Risk Score</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition">
+                        <div class="flex items-center space-x-3 mb-3">
+                            <img src="http://static.photos/people/200x200/1" class="w-12 h-12 rounded-full">
+                            <div>
+                                <h3 class="font-medium">@security_expert</h3>
+                                <p class="text-sm text-gray-400">1.2M followers</p>
+                            </div>
+                        </div>
+                        <div class="flex justify-between text-sm mb-2">
+                            <span class="text-gray-400">Risk Score:</span>
+                            <span class="text-red-400">High (87)</span>
+                        </div>
+                        <div class="flex justify-between text-sm mb-2">
+                            <span class="text-gray-400">Last Post:</span>
+                            <span>3 hours ago</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-400">Sentiment:</span>
+                            <span class="text-yellow-400">Negative</span>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition">
+                        <div class="flex items-center space-x-3 mb-3">
+                            <img src="http://static.photos/people/200x200/2" class="w-12 h-12 rounded-full">
+                            <div>
+                                <h3 class="font-medium">@news_analyst</h3>
+                                <p class="text-sm text-gray-400">850K followers</p>
+                            </div>
+                        </div>
+                        <div class="flex justify-between text-sm mb-2">
+                            <span class="text-gray-400">Risk Score:</span>
+                            <span class="text-yellow-400">Medium (54)</span>
+                        </div>
+                        <div class="flex justify-between text-sm mb-2">
+                            <span class="text-gray-400">Last Post:</span>
+                            <span>1 day ago</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-400">Sentiment:</span>
+                            <span class="text-blue-400">Neutral</span>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition">
+                        <div class="flex items-center space-x-3 mb-3">
+                            <img src="http://static.photos/people/200x200/3" class="w-12 h-12 rounded-full">
+                            <div>
+                                <h3 class="font-medium">@gov_official</h3>
+                                <p class="text-sm text-gray-400">500K followers</p>
+                            </div>
+                        </div>
+                        <div class="flex justify-between text-sm mb-2">
+                            <span class="text-gray-400">Risk Score:</span>
+                            <span class="text-green-400">Low (12)</span>
+                        </div>
+                        <div class="flex justify-between text-sm mb-2">
+                            <span class="text-gray-400">Last Post:</span>
+                            <span>2 days ago</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-400">Sentiment:</span>
+                            <span class="text-green-400">Positive</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Feather Icons
+        feather.replace();
+        
+        // Initialize AOS animations
+        AOS.init();
+
+        // Mobile menu toggle
+        document.getElementById('mobileMenuButton').addEventListener('click', function() {
+            document.querySelector('.sidebar').classList.toggle('hidden');
+        });
+
+        // Charts
+        // Trends Chart
+        const trendsCtx = document.getElementById('trendsChart').getContext('2d');
+        const trendsChart = new Chart(trendsCtx, {
+            type: 'line',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [
+                    {
+                        label: 'Mentions',
+                        data: [3200, 4100, 3800, 5400, 6700, 5200, 4800],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'High Risk',
+                        data: [120, 180, 150, 240, 320, 280, 210],
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Sentiment Chart
+        const sentimentCtx = document.getElementById('sentimentChart').getContext('2d');
+        const sentimentChart = new Chart(sentimentCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Negative', 'Neutral', 'Positive'],
+                datasets: [{
+                    data: [45, 35, 20],
+                    backgroundColor: [
+                        '#ef4444',
+                        '#64748b',
+                        '#10b981'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+
+        // Initialize Map
+        const map = L.map('map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Add some sample markers
+        const markers = [
+            { lat: 40.7128, lng: -74.0060, count: 1200, city: 'New York' },
+            { lat: 51.5074, lng: -0.1278, count: 850, city: 'London' },
+            { lat: 35.6762, lng: 139.6503, count: 620, city: 'Tokyo' },
+            { lat: 19.4326, lng: -99.1332, count: 450, city: 'Mexico City' },
+            { lat: 28.6139, lng: 77.2090, count: 780, city: 'New Delhi' }
+        ];
+
+        markers.forEach(marker => {
+            L.circleMarker([marker.lat, marker.lng], {
+                radius: Math.sqrt(marker.count) / 5,
+                fillColor: marker.count > 800 ? '#ef4444' : (marker.count > 500 ? '#f59e0b' : '#10b981'),
+                color: '#fff',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(map).bindPopup(`${marker.city}: ${marker.count} mentions`);
+        });
+    </script>
+</body>
+</html>
